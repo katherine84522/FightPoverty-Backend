@@ -10,3 +10,6 @@
 *.pro
 *~
 __pycache__
+
+# env files
+.env

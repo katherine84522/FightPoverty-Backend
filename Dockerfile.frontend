@@ -1,0 +1,17 @@
+# Dockerfile.frontend
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY client/package*.json ./
+
+# 安裝依賴
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# 再把前端程式碼放進 container
+COPY client/ .
+
+EXPOSE 5173
+
+# 直接啟動 Vite dev server
+CMD ["npm", "run", "dev:client", "--", "--host", "0.0.0.0", "--port", "5173"]
