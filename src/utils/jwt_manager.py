@@ -1,0 +1,161 @@
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+import jwt
+from fastapi import Request, HTTPException, status
+from fastapi.responses import Response
+
+
+class JWTManager:
+    def __init__(
+        self,
+        secret_key: str,
+        algorithm: str = "HS256",
+        access_expire_minutes: int = 15,
+        refresh_expire_days: int = 7,
+        access_cookie_name: str = "access_token",
+        refresh_cookie_name: str = "refresh_token",
+    ):
+        self.secret_key = secret_key
+        self.algorithm = algorithm
+        self.access_expire_minutes = access_expire_minutes
+        self.refresh_expire_days = refresh_expire_days
+        self.access_cookie_name = access_cookie_name
+        self.refresh_cookie_name = refresh_cookie_name
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _build_payload(
+        self,
+        user_info: Dict[str, Any],
+        token_type: str,
+        expires_delta: timedelta,
+    ) -> Dict[str, Any]:
+        """
+        預期 user_info 至少包含:
+          - 'id'   : 使用者 ID
+          - 'role' : 使用者角色 (可選)
+        會輸出 payload:
+          - userId, role, type, exp
+        """
+        user_id = user_info.get("id") or user_info.get("userId")
+        if not user_id:
+            raise ValueError("user_info 必須包含 'id' 或 'userId' 欄位")
+
+        # 🔴 關鍵：不論是 UUID 或其他型別，統一轉成字串
+        user_id_str = str(user_id)
+        payload: Dict[str, Any] = {
+            "userId": user_id_str,
+            "role": user_info.get("role"),
+            "type": token_type,  # "access" / "refresh"
+            "exp": datetime.now(timezone.utc) + expires_delta,
+        }
+        return payload
+
+    def _create_token(self, payload: Dict[str, Any]) -> str:
+        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+
+    def decode(self, token: str) -> Dict[str, Any]:
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token 已過期",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except jwt.InvalidTokenError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="無效的 Token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    def create_access_token(self, user_info: Dict[str, Any]) -> str:
+        payload = self._build_payload(
+            user_info=user_info,
+            token_type="access",
+            expires_delta=timedelta(minutes=self.access_expire_minutes),
+        )
+        return self._create_token(payload)
+
+    def create_refresh_token(self, user_info: Dict[str, Any]) -> str:
+        payload = self._build_payload(
+            user_info=user_info,
+            token_type="refresh",
+            expires_delta=timedelta(days=self.refresh_expire_days),
+        )
+        return self._create_token(payload)
+
+    # ------------------------------------------------------------------
+    # Cookie helpers（JSONResponse / Response 皆可）
+    # ------------------------------------------------------------------
+    def set_auth_cookies(self, response: Response, access: str, refresh: str) -> None:
+        # Access Token cookie
+        response.set_cookie(
+            key=self.access_cookie_name,
+            value=access,
+            httponly=True,
+            max_age=self.access_expire_minutes * 60,
+            samesite="lax",
+            secure=True,  # 本地開發若有問題可暫時改 False
+            path="/",
+        )
+
+        # Refresh Token cookie
+        response.set_cookie(
+            key=self.refresh_cookie_name,
+            value=refresh,
+            httponly=True,
+            max_age=self.refresh_expire_days * 24 * 60 * 60,
+            samesite="lax",
+            secure=True,
+            path="/",
+        )
+
+    def clear_auth_cookies(self, response: Response) -> None:
+        response.delete_cookie(self.access_cookie_name, path="/")
+        response.delete_cookie(self.refresh_cookie_name, path="/")
+
+    # ------------------------------------------------------------------
+    # 取出目前使用者（從 Access Token cookie）
+    # ------------------------------------------------------------------
+    def get_user_from_cookie(self, request: Request) -> Dict[str, Any]:
+        token = request.cookies.get(self.access_cookie_name)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="缺少 Access Token",
+            )
+
+        payload = self.decode(token)
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token 類型錯誤（需要 access）",
+            )
+
+        # payload 內會有：sub, type, username(若有), role(若有), exp...
+        return payload
+
+    # ------------------------------------------------------------------
+    # 取出 Refresh Token payload（給 refresh API 用）
+    # ------------------------------------------------------------------
+    def get_refresh_payload_from_cookie(self, request: Request) -> Dict[str, Any]:
+        token = request.cookies.get(self.refresh_cookie_name)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="缺少 Refresh Token",
+            )
+
+        payload = self.decode(token)
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token 類型錯誤（需要 refresh）",
+            )
+
+        return payload
