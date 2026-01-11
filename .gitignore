@@ -7,9 +7,36 @@
 
 # python
 *.pyc
+*.pyo
 *.pro
 *~
-__pycache__
+__pycache__/
+.venv/
+venv/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # env files
 .env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+
+# Logs
+*.log
+
+# Testing
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

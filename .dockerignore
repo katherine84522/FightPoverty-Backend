@@ -1,0 +1,51 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Logs
+*.log
+logs/
+
+# Testing (not needed in production image)
+tests/
+.coverage
+coverage.xml
+
+# Specs (documentation only)
+specs/
+
+# Docker files (avoid infinite loops)
+Dockerfile*
+docker-compose*.yml
+
+# Temporary files
+*.tmp
+*.swp
+.DS_Store

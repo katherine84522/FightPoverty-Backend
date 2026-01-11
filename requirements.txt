@@ -5,3 +5,9 @@ python-dotenv
 pydantic
 PyJWT
 bcrypt
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+fakeredis
