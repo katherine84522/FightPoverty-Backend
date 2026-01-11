@@ -23,10 +23,11 @@ load_dotenv()
 # ----------------------------------------------------------------------
 # JWT Manager 設定
 # ----------------------------------------------------------------------
+# JWT 設定（更新過期時間：access 60分鐘，refresh 60天）
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "DEFAULT_SECRET_KEY")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_EXPIRY_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRY_MINUTES", 15))
-JWT_REFRESH_EXPIRY_DAYS = int(os.getenv("JWT_REFRESH_EXPIRY_DAYS", 7))
+JWT_ACCESS_EXPIRY_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRY_MINUTES", 60))  # 1 小時
+JWT_REFRESH_EXPIRY_DAYS = int(os.getenv("JWT_REFRESH_EXPIRY_DAYS", 60))  # 60 天（2 個月）
 
 jwt_manager = JWTManager(
     secret_key=JWT_SECRET_KEY,
@@ -79,11 +80,18 @@ async def login(request: LoginRequest):
             content={"success": False, "message": "角色不符"},
         )
 
-    # 準備 token payload
+    # 準備 token payload（包含關聯 ID 以便權限檢查）
     user_info_for_token = {
         "id": user.get("id"),
         "role": user.get("role"),
     }
+    # 加入關聯 ID
+    if user.get("store_id"):
+        user_info_for_token["store_id"] = user.get("store_id")
+    if user.get("homeless_id"):
+        user_info_for_token["homeless_id"] = user.get("homeless_id")
+    if user.get("association_id"):
+        user_info_for_token["association_id"] = user.get("association_id")
 
     # 生成 tokens
     access_token = jwt_manager.create_access_token(user_info_for_token)
@@ -148,11 +156,19 @@ async def refresh(request: Request) -> JSONResponse:
         jwt_manager.clear_auth_cookies(response)
         return response
 
-    # 生成新 access token
+    # 生成新 access token（包含關聯 ID 以便權限檢查）
     user_info_for_token = {
         "id": user.get("id"),
         "role": user.get("role"),
     }
+    # 加入關聯 ID
+    if user.get("store_id"):
+        user_info_for_token["store_id"] = user.get("store_id")
+    if user.get("homeless_id"):
+        user_info_for_token["homeless_id"] = user.get("homeless_id")
+    if user.get("association_id"):
+        user_info_for_token["association_id"] = user.get("association_id")
+
     new_access = jwt_manager.create_access_token(user_info_for_token)
 
     # 設 cookie

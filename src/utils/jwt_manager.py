@@ -38,6 +38,7 @@ class JWTManager:
           - 'role' : 使用者角色 (可選)
         會輸出 payload:
           - userId, role, type, exp
+          - store_id, homeless_id, association_id (若有)
         """
         user_id = user_info.get("id") or user_info.get("userId")
         if not user_id:
@@ -51,6 +52,15 @@ class JWTManager:
             "type": token_type,  # "access" / "refresh"
             "exp": datetime.now(timezone.utc) + expires_delta,
         }
+
+        # 加入關聯 ID（用於權限檢查）
+        if user_info.get("store_id"):
+            payload["store_id"] = str(user_info.get("store_id"))
+        if user_info.get("homeless_id"):
+            payload["homeless_id"] = str(user_info.get("homeless_id"))
+        if user_info.get("association_id"):
+            payload["association_id"] = str(user_info.get("association_id"))
+
         return payload
 
     def _create_token(self, payload: Dict[str, Any]) -> str:
