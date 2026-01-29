@@ -28,6 +28,8 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "DEFAULT_SECRET_KEY")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_EXPIRY_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRY_MINUTES", 60))  # 1 小時
 JWT_REFRESH_EXPIRY_DAYS = int(os.getenv("JWT_REFRESH_EXPIRY_DAYS", 60))  # 60 天（2 個月）
+# 本地 HTTP 開發時設為 false，否則 cookie 不會被瀏覽器傳送，導致 401
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
 jwt_manager = JWTManager(
     secret_key=JWT_SECRET_KEY,
@@ -36,6 +38,7 @@ jwt_manager = JWTManager(
     refresh_expire_days=JWT_REFRESH_EXPIRY_DAYS,
     access_cookie_name="accessToken",   # 跟 Express 版一致
     refresh_cookie_name="refreshToken", # 跟 Express 版一致
+    cookie_secure=COOKIE_SECURE,
 )
 
 

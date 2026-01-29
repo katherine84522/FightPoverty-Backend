@@ -1,6 +1,7 @@
 # src/routers/allocations.py
 # 點數配額路由
 
+from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
@@ -140,6 +141,8 @@ async def list_allocations(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     homeless_id: Optional[UUID] = None,
+    start_date: Optional[str] = Query(None, description="開始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="結束日期 YYYY-MM-DD"),
     user_payload: Dict[str, Any] = Depends(authenticate_token),
 ):
     """
@@ -159,6 +162,19 @@ async def list_allocations(
             content={"success": False, "message": "權限不足"},
         )
 
+    start_datetime = None
+    end_datetime = None
+    if start_date:
+        try:
+            start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            pass
+
     if homeless_id:
         # 查詢特定街友的配額
         allocations, total = allocation_repo.list_by_homeless(
@@ -167,30 +183,39 @@ async def list_allocations(
             limit=limit,
         )
     else:
-        # 查詢所有配額
+        # 查詢所有配額（可依日期篩選）
         allocations, total = allocation_repo.list_all(
             page=page,
             limit=limit,
+            start_date=start_datetime,
+            end_date=end_datetime,
         )
 
     total_pages = (total + limit - 1) // limit
 
+    # 從街友列表建立 id -> 姓名 對照（與遊民管理同源，避免 get_by_id 查不到）
+    homeless_list, _ = homeless_repo.list_all(page=1, limit=10000)
+    homeless_name_by_id = {str(h.id): (h.name or h.id_number or "-") for h in homeless_list}
+
+    data = []
+    for a in allocations:
+        homeless_name = homeless_name_by_id.get(str(a.homeless_id), "-")
+        data.append({
+            "id": str(a.id),
+            "homeless_id": str(a.homeless_id),
+            "homeless_name": homeless_name,
+            "admin_id": str(a.admin_id),
+            "amount": a.amount,
+            "balance_before": a.balance_before,
+            "balance_after": a.balance_after,
+            "notes": a.notes,
+            "created_at": a.created_at.isoformat(),
+        })
+
     return JSONResponse(
         content={
             "success": True,
-            "data": [
-                {
-                    "id": str(a.id),
-                    "homeless_id": str(a.homeless_id),
-                    "admin_id": str(a.admin_id),
-                    "amount": a.amount,
-                    "balance_before": a.balance_before,
-                    "balance_after": a.balance_after,
-                    "notes": a.notes,
-                    "created_at": a.created_at.isoformat(),
-                }
-                for a in allocations
-            ],
+            "data": data,
             "meta": {
                 "page": page,
                 "limit": limit,

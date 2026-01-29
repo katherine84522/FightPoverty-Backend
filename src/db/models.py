@@ -67,6 +67,16 @@ class UserCreate(UserBase):
     association_id: Optional[UUID] = None
 
 
+class UserUpdate(BaseModel):
+    """更新使用者請求（皆選填）"""
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    role: Optional[UserRole] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=6)
+
+
 class User(UserBase):
     """完整使用者資料"""
     id: UUID

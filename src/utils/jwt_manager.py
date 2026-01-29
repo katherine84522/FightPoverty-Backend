@@ -15,6 +15,7 @@ class JWTManager:
         refresh_expire_days: int = 7,
         access_cookie_name: str = "access_token",
         refresh_cookie_name: str = "refresh_token",
+        cookie_secure: bool = True,
     ):
         self.secret_key = secret_key
         self.algorithm = algorithm
@@ -22,6 +23,7 @@ class JWTManager:
         self.refresh_expire_days = refresh_expire_days
         self.access_cookie_name = access_cookie_name
         self.refresh_cookie_name = refresh_cookie_name
+        self.cookie_secure = cookie_secure
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -103,14 +105,14 @@ class JWTManager:
     # Cookie helpers（JSONResponse / Response 皆可）
     # ------------------------------------------------------------------
     def set_auth_cookies(self, response: Response, access: str, refresh: str) -> None:
-        # Access Token cookie
+        # Access Token cookie（secure=False 時可在 HTTP 本地開發使用）
         response.set_cookie(
             key=self.access_cookie_name,
             value=access,
             httponly=True,
             max_age=self.access_expire_minutes * 60,
             samesite="lax",
-            secure=True,  # 本地開發若有問題可暫時改 False
+            secure=self.cookie_secure,
             path="/",
         )
 
@@ -121,7 +123,7 @@ class JWTManager:
             httponly=True,
             max_age=self.refresh_expire_days * 24 * 60 * 60,
             samesite="lax",
-            secure=True,
+            secure=self.cookie_secure,
             path="/",
         )
 

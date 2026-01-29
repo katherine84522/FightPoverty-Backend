@@ -168,6 +168,54 @@ class UserRepository(BaseRepository):
         self._redis.hset(key, "status", status.value)
         self._redis.hset(key, "updated_at", str(now))
 
+    def update(
+        self,
+        user_id: str | UUID,
+        updates: Dict[str, Any],
+    ) -> Optional[User]:
+        """更新使用者資料（name, email, phone, role, password, username）"""
+        user = self.get_by_id(user_id)
+        if not user:
+            return None
+
+        now = self._get_now()
+        # 若 username 變更，先刪除舊索引
+        new_username = updates.get("username")
+        if new_username is not None and new_username != user.username:
+            self._redis.delete(self._index_by_username(user.username))
+
+        # 若 role 變更，更新角色索引
+        new_role = updates.get("role")
+        if new_role is not None:
+            role_value = new_role.value if hasattr(new_role, "value") else new_role
+            old_role_value = user.role.value if hasattr(user.role, "value") else user.role
+            if role_value != old_role_value:
+                self._redis.srem(self._role_users_key(user.role), str(user_id))
+                self._redis.sadd(self._role_users_key(role_value), str(user_id))
+
+        # 合併更新到寫回欄位
+        update_data = {
+            "name": updates.get("name", user.name),
+            "email": updates.get("email") if "email" in updates else user.email,
+            "phone": updates.get("phone") if "phone" in updates else user.phone,
+            "username": updates.get("username", user.username),
+            "updated_at": now,
+        }
+        if "password" in updates and updates["password"]:
+            update_data["password"] = updates["password"]
+        if "role" in updates and updates["role"] is not None:
+            role_val = updates["role"]
+            update_data["role"] = role_val.value if hasattr(role_val, "value") else role_val
+
+        key = self._key_by_id(user_id)
+        for field, value in update_data.items():
+            if value is None:
+                self._redis.hset(key, field, "")
+            else:
+                self._redis.hset(key, field, self._serialize_value(value))
+
+        return self.get_by_id(user_id)
+
     def delete(self, user_id: str | UUID) -> None:
         """刪除使用者"""
         user = self.get_by_id(user_id)
@@ -890,7 +938,7 @@ class TransactionRepository(BaseRepository):
                     if isinstance(tx_id, bytes):
                         tx_id = tx_id.decode()
                     all_tx_ids.add(tx_id)
-                current = datetime(current.year, current.month, current.day + 1)
+                current = current + timedelta(days=1)
         else:
             # 沒有日期範圍時，需要掃描所有交易（不建議在生產環境使用）
             all_tx_ids = set()
@@ -1049,7 +1097,7 @@ class AllocationRepository(BaseRepository):
                     if isinstance(aid, bytes):
                         aid = aid.decode()
                     all_allocation_ids.add(aid)
-                current = datetime(current.year, current.month, current.day + 1)
+                current = current + timedelta(days=1)
         else:
             keys = self._redis.keys("allocation:*")
             for key in keys:
