@@ -37,15 +37,29 @@ async def create_store(
     """
     新增商店。
 
-    權限：system_admin, association_admin
+    權限：system_admin, association_admin, association_partner（夥伴僅能新增所屬商圈的店家）
     """
-    user_role = user_payload.get("role")
-    allowed_roles = [UserRole.SYSTEM_ADMIN.value, UserRole.ASSOCIATION_ADMIN.value]
+    user_role = (user_payload.get("role") or "").strip() if isinstance(user_payload.get("role"), str) else user_payload.get("role")
+    allowed_roles = [
+        UserRole.SYSTEM_ADMIN.value,
+        UserRole.ASSOCIATION_ADMIN.value,
+        UserRole.ASSOCIATION_PARTNER.value,
+    ]
     if user_role not in allowed_roles:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"success": False, "message": "權限不足"},
         )
+
+    # 商圈夥伴只能新增所屬商圈的店家，強制使用登入者的 association_id
+    if user_role == UserRole.ASSOCIATION_PARTNER.value:
+        assoc_id = user_payload.get("association_id")
+        if not assoc_id:
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"success": False, "message": "找不到所屬商圈"},
+            )
+        data = data.model_copy(update={"association_id": UUID(assoc_id) if isinstance(assoc_id, str) else assoc_id})
 
     # 建立商店
     store_id = uuid4()
